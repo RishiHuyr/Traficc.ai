@@ -1,90 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/* Tailwind Directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import '@fontsource/dm-sans/400.css';
-@import '@fontsource/dm-sans/500.css';
-@import '@fontsource/dm-sans/600.css';
-@import '@fontsource/dm-sans/700.css';
-@import '@fontsource/space-grotesk/400.css';
-@import '@fontsource/space-grotesk/500.css';
-@import '@fontsource/space-grotesk/600.css';
-@import '@fontsource/space-grotesk/700.css';
-
+/* CSS Variables */
 @layer base {
   :root {
-    /* TRAFIQ.AI Dark Command Center Theme */
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+    /* OBSIDIAN ELITE - DRAMATIC DARK THEME */
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
+    /* Backgrounds - VERY DARK */
+    --background: 210 50% 2%;
+    /* Almost black background */
+    --foreground: 220 10% 96%;
+    /* Bright white text */
 
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
+    --card: 215 40% 7%;
+    /* Dark cards */
+    --card-foreground: 220 10% 96%;
 
-    /* Cyan/Teal Primary - Traffic Intelligence */
-    --primary: 168 100% 45%;
-    --primary-foreground: 222 47% 6%;
+    --popover: 215 40% 8%;
+    --popover-foreground: 220 10% 96%;
 
-    /* Deep Navy Secondary */
-    --secondary: 222 47% 12%;
-    --secondary-foreground: 210 40% 98%;
+    /* Primary - BRIGHT CYAN/TEAL */
+    --primary: 178 100% 45%;
+    /* Bright teal #00E5D9 */
+    --primary-foreground: 210 50% 2%;
 
-    --muted: 222 30% 15%;
-    --muted-foreground: 215 20% 55%;
+    /* Secondary */
+    --secondary: 215 45% 5%;
+    /* Very dark */
+    --secondary-foreground: 220 10% 96%;
 
-    /* Teal Accent */
-    --accent: 168 80% 40%;
-    --accent-foreground: 222 47% 6%;
+    /* Muted */
+    --muted: 215 30% 10%;
+    --muted-foreground: 220 10% 70%;
 
-    /* Alert Colors */
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    /* Accent */
+    --accent: 178 100% 45%;
+    --accent-foreground: 210 50% 2%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 6%;
+    /* Risk Colors - BRIGHT & VISIBLE */
+    --destructive: 348 90% 60%;
+    /* Bright red */
+    --destructive-foreground: 220 10% 96%;
 
-    --success: 152 76% 40%;
-    --success-foreground: 210 40% 98%;
+    --warning: 38 100% 60%;
+    /* Bright orange/amber */
+    --warning-foreground: 210 50% 2%;
 
-    --border: 222 30% 18%;
-    --input: 222 30% 18%;
-    --ring: 168 100% 45%;
+    --success: 158 75% 60%;
+    /* Bright green */
+    --success-foreground: 220 10% 96%;
+
+    /* Borders */
+    --border: 220 20% 18%;
+    --input: 220 20% 18%;
+    --ring: 178 100% 45%;
 
     --radius: 0.75rem;
 
-    /* Custom TRAFIQ Colors */
-    --risk-low: 152 76% 40%;
-    --risk-medium: 38 92% 50%;
-    --risk-high: 0 72% 51%;
-    --risk-critical: 0 90% 40%;
+    /* Risk Colors */
+    --risk-low: 158 75% 60%;
+    --risk-medium: 38 100% 60%;
+    --risk-high: 348 90% 60%;
+    --risk-critical: 348 95% 55%;
 
-    /* Glows & Effects */
-    --glow-primary: 0 0 30px hsl(168 100% 45% / 0.3);
-    --glow-warning: 0 0 30px hsl(38 92% 50% / 0.3);
-    --glow-danger: 0 0 30px hsl(0 72% 51% / 0.3);
+    /* Glows */
+    --glow-primary: 0 0 30px hsl(178 100% 45% / 0.4);
+    --glow-warning: 0 0 30px hsl(38 100% 60% / 0.4);
+    --glow-danger: 0 0 30px hsl(348 90% 60% / 0.4);
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(168 100% 45%) 0%, hsl(180 80% 35%) 100%);
-    --gradient-dark: linear-gradient(180deg, hsl(222 47% 8%) 0%, hsl(222 47% 4%) 100%);
-    --gradient-glass: linear-gradient(135deg, hsl(222 47% 15% / 0.5) 0%, hsl(222 47% 10% / 0.3) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(222 47% 6%) 0%, hsl(222 50% 10%) 50%, hsl(222 47% 6%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(178 100% 45%) 0%, hsl(178 90% 40%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(215 40% 7%) 0%, hsl(210 50% 2%) 100%);
+    --gradient-glass: linear-gradient(135deg, hsl(220 25% 15% / 0.5) 0%, hsl(220 25% 10% / 0.3) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(210 50% 2%) 0%, hsl(215 40% 7%) 50%, hsl(210 50% 2%) 100%);
 
     /* Sidebar */
-    --sidebar-background: 222 47% 7%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 168 100% 45%;
-    --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 47% 12%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 30% 15%;
-    --sidebar-ring: 168 100% 45%;
+    --sidebar-background: 210 55% 1%;
+    --sidebar-foreground: 220 10% 96%;
+    --sidebar-primary: 178 100% 45%;
+    --sidebar-primary-foreground: 210 50% 2%;
+    --sidebar-accent: 215 45% 5%;
+    --sidebar-accent-foreground: 220 10% 96%;
+    --sidebar-border: 220 20% 15%;
+    --sidebar-ring: 178 100% 45%;
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+    --background: 210 50% 2%;
+    --foreground: 220 10% 96%;
   }
 }
 
@@ -100,32 +107,60 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'DM Sans', sans-serif;
+    letter-spacing: -0.01em;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* Typography Refinements */
+  label,
+  .text-label {
+    letter-spacing: 0.025em;
+    font-weight: 500;
+  }
+
+  .text-number {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-description {
+    font-weight: 400;
+    opacity: 0.85;
   }
 }
 
 @layer components {
-  /* Glass Panel Effect */
+
+  /* Glass Panel Effect - Institutional Quality */
   .glass-panel {
-    @apply bg-card/60 backdrop-blur-xl border border-border/50 rounded-xl;
-    box-shadow: 
-      0 4px 30px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    @apply bg-card/50 backdrop-blur-md border border-border rounded-xl;
+    box-shadow:
+      0 8px 30px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .glass-panel-hover {
-    @apply glass-panel transition-all duration-300;
+    @apply glass-panel;
+    transition: all 150ms ease-out;
   }
 
   .glass-panel-hover:hover {
-    @apply border-primary/30;
-    box-shadow: 
-      0 4px 30px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      var(--glow-primary);
+    transform: translateY(-1px) scale(1.005);
+    background: hsl(var(--card) / 0.6);
+    border-color: hsl(var(--primary) / 0.15);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 0 0 1px hsl(var(--primary) / 0.08);
   }
 
   /* Risk Level Indicators */
@@ -154,48 +189,35 @@
     box-shadow: var(--glow-danger);
   }
 
-  /* Animated Pulse Ring */
-  .pulse-ring {
-    @apply relative;
+  /* Gradient Backgrounds */
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
   }
 
-  .pulse-ring::before {
-    content: '';
-    @apply absolute inset-0 rounded-full;
-    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  .bg-gradient-dark {
+    background: var(--gradient-dark);
   }
 
-  @keyframes pulse-ring {
-    0%, 100% {
-      opacity: 0.3;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0;
-      transform: scale(1.5);
-    }
+  .bg-gradient-glass {
+    background: var(--gradient-glass);
   }
 
-  /* Grid Background Pattern */
-  .grid-pattern {
-    background-image: 
-      linear-gradient(hsl(var(--border)) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px);
-    background-size: 50px 50px;
-  }
-
-  /* Stat Card Gradient Border */
+  /* Animated Gradient Border */
   .gradient-border {
-    @apply relative overflow-hidden rounded-xl;
+    position: relative;
+    background: var(--card);
+    border-radius: var(--radius);
   }
 
   .gradient-border::before {
     content: '';
-    @apply absolute inset-0 rounded-xl;
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
     padding: 1px;
     background: var(--gradient-primary);
-    -webkit-mask: 
-      linear-gradient(#fff 0 0) content-box, 
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
       linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -221,10 +243,13 @@
 
   /* Map Marker Animation */
   @keyframes marker-pulse {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: scale(1);
       opacity: 1;
     }
+
     50% {
       transform: scale(1.2);
       opacity: 0.7;
@@ -241,9 +266,11 @@
       transform: translateX(-100%);
       opacity: 0;
     }
+
     50% {
       opacity: 1;
     }
+
     100% {
       transform: translateX(100%);
       opacity: 0;
@@ -251,29 +278,70 @@
   }
 
   .data-flow {
-    animation: data-flow 3s linear infinite;
+    animation: data-flow 3s ease-in-out infinite;
   }
 }
 
-@layer utilities {
-  .text-gradient {
-    @apply bg-clip-text text-transparent;
-    background-image: var(--gradient-primary);
+/* Map Highlight Animations */
+@keyframes pulse-highlight {
+
+  0%,
+  100% {
+    opacity: 0.8;
+    stroke-width: 8;
   }
 
-  .bg-gradient-primary {
-    background-image: var(--gradient-primary);
+  50% {
+    opacity: 1;
+    stroke-width: 10;
   }
+}
 
-  .bg-gradient-dark {
-    background-image: var(--gradient-dark);
-  }
+.pulse-highlight {
+  animation: pulse-highlight 1s ease-in-out infinite;
+}
 
-  .bg-gradient-glass {
-    background-image: var(--gradient-glass);
-  }
+/* Cinematic Map Effects */
+.map-tiles-cinematic {
+  filter: brightness(0.85) contrast(1.1) saturate(0.9);
+  transition: filter 0.3s ease;
+}
 
-  .bg-gradient-hero {
-    background-image: var(--gradient-hero);
-  }
+/* Cinematic Vignette Effect */
+.leaflet-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+      transparent 0%,
+      transparent 50%,
+      rgba(10, 15, 30, 0.3) 80%,
+      rgba(10, 15, 30, 0.6) 100%);
+  z-index: 1000;
+}
+
+/* Road Glow Effects */
+.road-glow-outer {
+  filter: blur(8px);
+}
+
+.road-glow-inner {
+  filter: blur(4px);
+}
+
+.road-core {
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+/* Smooth Map Transitions */
+.leaflet-fade-anim .leaflet-tile {
+  transition: opacity 0.4s ease-in-out;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }

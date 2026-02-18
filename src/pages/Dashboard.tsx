@@ -2,12 +2,9 @@ import { motion } from 'framer-motion';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatsGrid } from '@/components/dashboard/StatsGrid';
 import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
-import { RiskZonesPanel } from '@/components/dashboard/RiskZonesPanel';
-import { CameraFeedsPanel } from '@/components/dashboard/CameraFeedsPanel';
-import { TrendsChart, WeeklyChart, RiskDistributionChart } from '@/components/dashboard/Charts';
-import { RecommendationsPanel } from '@/components/dashboard/RecommendationsPanel';
 import { RiskHeatmap } from '@/components/dashboard/RiskHeatmap';
 import { Calendar } from 'lucide-react';
+import { useState, useCallback } from 'react';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -25,13 +22,25 @@ const itemVariants = {
 };
 
 export function Dashboard() {
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-  
+
+  // Handle alert click with auto-clear after zoom
+  const handleAlertClick = useCallback((zoneId: string) => {
+    setSelectedSegmentId(zoneId);
+
+    // Clear selection after 2 seconds to prevent re-triggering
+    setTimeout(() => {
+      setSelectedSegmentId(null);
+    }, 2000);
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
@@ -51,10 +60,10 @@ export function Dashboard() {
             </p>
           </div>
         </motion.div>
-        
+
         {/* Stats Grid */}
         <StatsGrid />
-        
+
         {/* Main Content */}
         <motion.div
           variants={containerVariants}
@@ -62,33 +71,14 @@ export function Dashboard() {
           animate="visible"
           className="grid grid-cols-12 gap-6"
         >
-          {/* Left Column - Heatmap & Charts */}
-          <motion.div variants={itemVariants} className="col-span-12 lg:col-span-8 space-y-6">
-            <RiskHeatmap />
-            <TrendsChart />
-            <CameraFeedsPanel />
+          {/* Map - Full Width */}
+          <motion.div variants={itemVariants} className="col-span-12 lg:col-span-9">
+            <RiskHeatmap selectedSegmentId={selectedSegmentId} />
           </motion.div>
-          
-          {/* Right Column - Alerts & Zones */}
-          <motion.div variants={itemVariants} className="col-span-12 lg:col-span-4 space-y-6">
-            <AlertsPanel />
-            <RiskZonesPanel />
-          </motion.div>
-        </motion.div>
-        
-        {/* Bottom Section */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-12 gap-6"
-        >
-          <motion.div variants={itemVariants} className="col-span-12 lg:col-span-8">
-            <RecommendationsPanel />
-          </motion.div>
-          <motion.div variants={itemVariants} className="col-span-12 lg:col-span-4 space-y-6">
-            <WeeklyChart />
-            <RiskDistributionChart />
+
+          {/* Alerts - Right Column */}
+          <motion.div variants={itemVariants} className="col-span-12 lg:col-span-3">
+            <AlertsPanel onAlertClick={handleAlertClick} />
           </motion.div>
         </motion.div>
       </div>
@@ -97,3 +87,4 @@ export function Dashboard() {
 }
 
 export default Dashboard;
+

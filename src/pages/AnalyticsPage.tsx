@@ -1,401 +1,237 @@
+import { useEffect, useState, useMemo, Suspense, lazy } from 'react';
 import { motion } from 'framer-motion';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Calendar, 
-  Download, 
-  Filter,
-  BarChart3,
-  PieChart,
-  Activity,
-  Target,
-  Clock,
-  Zap
-} from 'lucide-react';
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-  Legend
-} from 'recharts';
-import { trafficTrends, weeklyTrends, riskZones, safetyMetrics } from '@/lib/mockData';
+import { Download, Calendar, RefreshCcw, Sparkles, MapPin } from 'lucide-react';
+import { useAnalyticsStore } from '@/services/analyticsService';
+import { useRiskStore } from '@/services/riskStore';
+import { ExecutiveSummary } from '@/components/analytics/ExecutiveSummary';
+import { InsightCard } from '@/components/analytics/InsightCard';
+import { useNavigate } from 'react-router-dom';
 
-const violationTypes = [
-  { name: 'Speeding', value: 45, color: 'hsl(var(--destructive))' },
-  { name: 'Red Light', value: 25, color: 'hsl(var(--warning))' },
-  { name: 'Wrong Lane', value: 15, color: 'hsl(var(--primary))' },
-  { name: 'No Signal', value: 10, color: 'hsl(var(--success))' },
-  { name: 'Other', value: 5, color: 'hsl(var(--muted-foreground))' },
-];
-
-const monthlyComparison = [
-  { month: 'Jan', accidents: 145, violations: 2340, predictions: 138 },
-  { month: 'Feb', accidents: 132, violations: 2180, predictions: 128 },
-  { month: 'Mar', accidents: 118, violations: 1950, predictions: 115 },
-  { month: 'Apr', accidents: 98, violations: 1720, predictions: 102 },
-  { month: 'May', accidents: 85, violations: 1580, predictions: 88 },
-  { month: 'Jun', accidents: 72, violations: 1420, predictions: 75 },
-];
+// Lazy Load Heavy Charts
+const TrendAnalysis = lazy(() => import('@/components/analytics/TrendAnalysis').then(module => ({ default: module.TrendAnalysis })));
 
 export default function AnalyticsPage() {
+  const [isSimulating, setIsSimulating] = useState(true);
+  const updateAnalytics = useAnalyticsStore((state) => state.updateAnalytics);
+
+  // Simulation Effect to make page feel "Live"
+  useEffect(() => {
+    if (!isSimulating) return;
+
+    const interval = setInterval(() => {
+      // Simulate micro-changes in risk score and active zones
+      updateAnalytics({
+        activeRiskZones: Math.floor(Math.random() * 5) + 5, // 5-10
+        averageRiskScore: Math.floor(Math.random() * 10) + 40, // 40-50
+      });
+    }, 5000); // Update every 5s
+
+    return () => clearInterval(interval);
+  }, [isSimulating, updateAnalytics]);
+
+  const { zones, fetchNearbyRoads, userLocation } = useRiskStore();
+  const navigate = useNavigate();
+  const [dismissedInsightIds, setDismissedInsightIds] = useState<Set<string>>(new Set());
+
+  // Ensure we have data
+  useEffect(() => {
+    // If no zones and no location, try fetching default or wait for user location
+    // Real-app: trigger location request here if needed. 
+    // For now, if we have no zones, we trigger a fetch for default location (NY) or user's last known
+    if (zones.length <= 7 && !userLocation) { // 7 is length of mock data
+      // optionally trigger fetch for default location
+    }
+  }, [zones, userLocation]);
+
+  const generateInsights = useMemo(() => {
+    // Filter out dismissed
+    // Generate insights from zones
+    const generated = [];
+
+    // 1. Critical High Risk Zones
+    const criticalZones = zones.filter(z => z.riskLevel === 'critical');
+    criticalZones.forEach(z => {
+      generated.push({
+        id: `crit-${z.id}`,
+        type: 'critical' as const,
+        title: 'Critical Congestion Detected',
+        description: `Severe delays detected on ${z.name}. Traffic flow has halted.`,
+        recommendation: 'Dispatch traffic control unit to clear intersection.',
+        relatedZoneId: z.id
+      });
+    });
+
+    // 2. Rising Risk (High)
+    const highZones = zones.filter(z => z.riskLevel === 'high');
+    highZones.forEach(z => {
+      generated.push({
+        id: `high-${z.id}`,
+        type: 'warning' as const,
+        title: 'Congestion Build-up',
+        description: `Traffic density increasing on ${z.name}. Potential bottleneck.`,
+        recommendation: 'Monitor signal timing and upstream flow.',
+        relatedZoneId: z.id
+      });
+    });
+
+    // 3. Positive Trends (Low risk but previously might have been high - simulated)
+    // Since we don't have historical data per zone in this simple store, we pick a few random 'low' zones to show as 'cleared'
+    const lowZones = zones.filter(z => z.riskLevel === 'low').slice(0, 1);
+    lowZones.forEach(z => {
+      generated.push({
+        id: `low-${z.id}`,
+        type: 'positive' as const,
+        title: 'Traffic Flow Restored',
+        description: `Congestion cleared on ${z.name}. Flow rate returning to normal.`,
+        recommendation: 'Maintain current signal adjustments.',
+        relatedZoneId: z.id
+      });
+    });
+
+    return generated.filter(i => !dismissedInsightIds.has(i.id));
+  }, [zones, dismissedInsightIds]);
+
+  const handleDismiss = (id: string) => {
+    setDismissedInsightIds(prev => new Set(prev).add(id));
+  };
+
+  const handleViewZone = (zoneId: string) => {
+    navigate(`/map?focusZone=${zoneId}`);
+  };
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <motion.div 
+      <div className="space-y-8 p-2">
+        {/* ... Header ... */}
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
         >
+          {/* ... (Keep existing Header content) ... */}
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">
-              Analytics & Reports
+            <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
+              Analytics & Intelligence
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Comprehensive traffic safety analytics and trend analysis
+            <p className="text-zinc-400 mt-1 max-w-2xl text-sm">
+              Real-time decision support system driven by AI pattern recognition.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
+            {/* Check if we have real location data */}
+            {userLocation && (
+              <Badge variant="outline" className="text-emerald-500 border-emerald-500/20 bg-emerald-500/5 animate-pulse">
+                <MapPin className="w-3 h-3 mr-1" />
+                Loc: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
+              </Badge>
+            )}
+            <Button variant="outline" size="sm" className="bg-black/20 border-zinc-800 text-zinc-300 hover:text-white">
               <Calendar className="w-4 h-4 mr-2" />
-              Last 30 Days
+              Last 24 Hours
             </Button>
-            <Button variant="outline" size="sm">
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
+            <Button variant="outline" size="sm" className="bg-black/20 border-zinc-800 text-zinc-300 hover:text-white" onClick={() => window.location.reload()}>
+              <RefreshCcw className="w-4 h-4 mr-2" />
+              Refresh Data
             </Button>
-            <Button variant="glow" size="sm">
+            <Button variant="default" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-lg shadow-emerald-900/20">
               <Download className="w-4 h-4 mr-2" />
               Export Report
             </Button>
           </div>
         </motion.div>
 
-        {/* KPI Cards */}
-        <motion.div 
+        {/* Executive Summary */}
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
         >
-          {safetyMetrics.map((metric, index) => (
-            <Card key={index} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{metric.label}</p>
-                    <p className="text-2xl font-bold text-foreground mt-1">
-                      {metric.value.toLocaleString()}{metric.unit}
-                    </p>
-                  </div>
-                  <div className={`flex items-center gap-1 text-sm ${
-                    metric.trend === 'down' ? 'text-success' : 
-                    metric.trend === 'up' && metric.label.includes('Reduction') ? 'text-destructive' : 'text-primary'
-                  }`}>
-                    {metric.trend === 'down' ? (
-                      <TrendingDown className="w-4 h-4" />
-                    ) : (
-                      <TrendingUp className="w-4 h-4" />
-                    )}
-                    {Math.abs(metric.change)}
-                  </div>
-                </div>
-                <div className="mt-3 h-1 bg-muted rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(Math.abs(metric.change) * 5, 100)}%` }}
-                    transition={{ delay: 0.3 + index * 0.1, duration: 0.5 }}
-                    className={`h-full rounded-full ${
-                      metric.trend === 'down' ? 'bg-success' : 'bg-primary'
-                    }`}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <ExecutiveSummary />
         </motion.div>
 
-        {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Monthly Comparison */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-2"
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-primary" />
-                  Accident Prevention Trend
-                </CardTitle>
-                <Badge variant="outline" className="text-success border-success/30">
-                  <TrendingDown className="w-3 h-3 mr-1" />
-                  50% reduction
-                </Badge>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyComparison}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="month" 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--popover))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="accidents" 
-                        name="Actual Accidents"
-                        stroke="hsl(var(--destructive))" 
-                        strokeWidth={2}
-                        dot={{ fill: 'hsl(var(--destructive))' }}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="predictions" 
-                        name="AI Predictions"
-                        stroke="hsl(var(--primary))" 
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={{ fill: 'hsl(var(--primary))' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Violation Types */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <PieChart className="w-4 h-4 text-primary" />
-                  Violation Distribution
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsPieChart>
-                      <Pie
-                        data={violationTypes}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {violationTypes.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--popover))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
-                      />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {violationTypes.map((type, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: type.color }}
-                      />
-                      <span className="text-xs text-muted-foreground">{type.name}</span>
-                      <span className="text-xs font-semibold text-foreground ml-auto">{type.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Hourly Traffic */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-primary" />
-                  Hourly Risk Pattern
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trafficTrends}>
-                      <defs>
-                        <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="hour" 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--popover))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="riskScore" 
-                        stroke="hsl(var(--primary))" 
-                        fill="url(#riskGradient)"
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Weekly Comparison */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-primary" />
-                  Weekly Incident Analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyTrends}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis 
-                        dataKey="day" 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <YAxis 
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <Tooltip 
-                        contentStyle={{
-                          backgroundColor: 'hsl(var(--popover))',
-                          border: '1px solid hsl(var(--border))',
-                          borderRadius: '8px',
-                        }}
-                      />
-                      <Bar dataKey="accidents" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Performance Metrics */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+        {/* AI Insights Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
+          transition={{ delay: 0.2 }}
         >
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Target className="w-4 h-4 text-primary" />
-                AI Performance Metrics
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  { label: 'Prediction Accuracy', value: 94.2, target: 95, color: 'primary' },
-                  { label: 'Detection Rate', value: 98.7, target: 99, color: 'success' },
-                  { label: 'False Positive Rate', value: 2.1, target: 3, color: 'warning', inverse: true },
-                ].map((metric, index) => (
-                  <div key={index} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">{metric.label}</span>
-                      <span className="text-sm font-semibold text-foreground">{metric.value}%</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${metric.value}%` }}
-                        transition={{ delay: 0.7 + index * 0.1, duration: 0.5 }}
-                        className={`h-full rounded-full bg-${metric.color}`}
-                        style={{ backgroundColor: `hsl(var(--${metric.color}))` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Zap className="w-3 h-3" />
-                      Target: {metric.target}%
-                    </div>
-                  </div>
-                ))}
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            AI Generated Insights {userLocation ? '(Location Based)' : '(Simulated)'}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {generateInsights.length > 0 ? (
+              generateInsights.slice(0, 6).map((insight) => (
+                <InsightCard
+                  key={insight.id}
+                  {...insight}
+                  onDismiss={() => handleDismiss(insight.id)}
+                  onViewZone={() => handleViewZone(insight.relatedZoneId)}
+                />
+              ))
+            ) : (
+              <div className="col-span-3 h-32 flex items-center justify-center border border-dashed border-zinc-800 rounded-xl bg-white/5">
+                <p className="text-zinc-500 text-sm">No active insights in your area.</p>
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
         </motion.div>
+
+        {/* Charts Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className='grid grid-cols-1 lg:grid-cols-3 gap-6'
+        >
+          <Suspense fallback={<div className="h-[300px] w-full bg-zinc-900/50 animate-pulse rounded-xl" />}>
+            <div className="lg:col-span-2">
+              <TrendAnalysis />
+            </div>
+          </Suspense>
+
+          {/* Top Risk Zones List */}
+          <div className="h-full min-h-[250px] bg-black/40 border-white/5 backdrop-blur-sm border rounded-xl p-4 flex flex-col">
+            <h4 className="text-sm font-medium text-zinc-300 mb-4 flex items-center justify-between">
+              <span>Critical Zones</span>
+              <span className="text-[10px] text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-full">Live Monitor</span>
+            </h4>
+
+            <div className="space-y-3">
+              {[
+                { name: 'Downtown Intersection A', risk: 85, trend: 'up' },
+                { name: 'Highway 101 North', risk: 72, trend: 'stable' },
+                { name: 'School Zone B', risk: 64, trend: 'down' },
+              ].map((zone, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-medium text-zinc-200 group-hover:text-emerald-400 transition-colors">{zone.name}</span>
+                    <span className="text-[10px] text-zinc-500">Camera ID: CAM-00{i + 1}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-white">{zone.risk}%</div>
+                      <div className="text-[10px] text-zinc-600">Risk Score</div>
+                    </div>
+                    <div className={`w-1.5 h-1.5 rounded-full ${zone.risk > 80 ? 'bg-rose-500 animate-pulse' : zone.risk > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Button variant="ghost" className="w-full mt-auto text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/5">
+              View All Zones
+            </Button>
+          </div>
+        </motion.div>
+
       </div>
     </DashboardLayout>
   );

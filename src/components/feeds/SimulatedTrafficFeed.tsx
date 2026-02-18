@@ -1,47 +1,22 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Play, 
-  Pause, 
-  Maximize2, 
-  Volume2, 
+import {
+  Play,
+  Pause,
+  Video,
+  Volume2,
   VolumeX,
-  Radio,
   Cpu,
   Car,
-  AlertTriangle,
-  Eye,
-  Settings
+  Activity,
+  Scan
 } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { aiService } from '@/services/aiModelService';
+import { DetectedObject } from '@tensorflow-models/coco-ssd';
 
-interface DetectedVehicle {
-  id: string;
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  width: number;
-  height: number;
-  type: 'car' | 'truck' | 'motorcycle' | 'bus';
-  risk: 'low' | 'medium' | 'high';
-  confidence: number;
-  speed: number;
-  direction: 'left' | 'right' | 'up' | 'down';
-  lane: number;
-  violation?: string;
-  trackingId: number;
-  framesVisible: number;
-}
-
+// Props Interface
 interface SimulatedTrafficFeedProps {
   videoSrc: string;
   cameraId: string;
@@ -49,435 +24,229 @@ interface SimulatedTrafficFeedProps {
   location: string;
 }
 
-// Car-only detection configuration
-const CAR_CONFIG = {
-  width: { min: 5, max: 7 },
-  height: { min: 3.5, max: 4.5 },
-  minSpeed: 30,
-  maxSpeed: 65
-};
+// Configuration
+const CONFIDENCE_THRESHOLD = 0.55;
+const DETECTION_INTERVAL_MS = 250; // Throttled to 4 FPS for performance
+const VALID_CLASSES = ['car', 'truck', 'bus', 'motorcycle'];
 
-// Predefined lane positions for realistic traffic flow
-const lanes = [
-  { y: 32, direction: 'right' as const },
-  { y: 48, direction: 'right' as const },
-  { y: 58, direction: 'left' as const },
-  { y: 72, direction: 'left' as const }
-];
-
-// Strict confidence threshold for car detection only
-const CONFIDENCE_THRESHOLD = 0.88;
-const MIN_FRAMES_VISIBLE = 5;
-const MAX_CARS_PER_LANE = 2;
-
-let globalTrackingId = 0;
-
-function generateCar(laneIndex: number): DetectedVehicle {
-  const lane = lanes[laneIndex];
-  
-  // Start from edge based on lane direction
-  const startX = lane.direction === 'right' ? -8 : 108;
-  const targetX = lane.direction === 'right' ? 108 : -8;
-  
-  // Minimal lane variation for stability
-  const yVariation = (Math.random() - 0.5) * 2;
-  
-  // Consistent car sizing
-  const width = CAR_CONFIG.width.min + Math.random() * (CAR_CONFIG.width.max - CAR_CONFIG.width.min);
-  const height = CAR_CONFIG.height.min + Math.random() * (CAR_CONFIG.height.max - CAR_CONFIG.height.min);
-  
-  const speed = CAR_CONFIG.minSpeed + Math.random() * (CAR_CONFIG.maxSpeed - CAR_CONFIG.minSpeed);
-  
-  // Risk assessment based on speed
-  let risk: 'low' | 'medium' | 'high' = 'low';
-  if (speed > 55) risk = 'high';
-  else if (speed > 45) risk = 'medium';
-  
-  // Rare violations for realism
-  let violation: string | undefined;
-  if (risk === 'high' && Math.random() > 0.8) {
-    violation = 'Speeding';
-  }
-  
-  globalTrackingId++;
-  
-  return {
-    id: `car-${globalTrackingId}`,
-    x: startX,
-    y: lane.y + yVariation,
-    targetX,
-    targetY: lane.y + yVariation,
-    width,
-    height,
-    type: 'car',
-    risk,
-    confidence: 0.90 + Math.random() * 0.09, // High confidence only
-    speed: Math.round(speed),
-    direction: lane.direction,
-    lane: laneIndex,
-    violation,
-    trackingId: globalTrackingId,
-    framesVisible: 0
-  };
-}
-
-export default function SimulatedTrafficFeed({
+const SimulatedTrafficFeed = memo(({
   videoSrc,
   cameraId,
   cameraName,
   location
-}: SimulatedTrafficFeedProps) {
+}: SimulatedTrafficFeedProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // UI State (kept minimal)
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
-  const [isHovered, setIsHovered] = useState(false);
-  const [detectedVehicles, setDetectedVehicles] = useState<DetectedVehicle[]>([]);
-  const [totalDetections, setTotalDetections] = useState(0);
-  const [violationCount, setViolationCount] = useState(0);
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [detectionCount, setDetectionCount] = useState(0); // Update this rarely
 
-  // Initialize with vehicles already in frame
+  // Mutable Refs (No Re-renders)
+  const lastDetectTimeRef = useRef(0);
+  const detectionsRef = useRef<DetectedObject[]>([]);
+  const isVisibleRef = useRef(false);
+  const requestRef = useRef<number>();
+  const drawRef = useRef<number>();
+
+  // Load Model
   useEffect(() => {
-    const initialCars: DetectedVehicle[] = [];
-    lanes.forEach((lane, laneIndex) => {
-      // Add 1 car per lane initially
-      const car = generateCar(laneIndex);
-      // Position within visible area
-      car.x = 20 + Math.random() * 60;
-      car.framesVisible = MIN_FRAMES_VISIBLE + 1;
-      initialCars.push(car);
-    });
-    setDetectedVehicles(initialCars);
+    aiService.loadModel().then(() => setIsModelReady(true));
   }, []);
 
-  // Simulate car-only detection with stable tracking
+  // Intersection Observer
   useEffect(() => {
-    if (!isPlaying) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const visible = entry.isIntersecting;
+        isVisibleRef.current = visible;
 
-    const interval = setInterval(() => {
-      setDetectedVehicles(prev => {
-        let updated = prev.map(v => {
-          // Smooth movement based on speed
-          const speedFactor = v.speed / 600;
-          const moveX = v.direction === 'right' ? speedFactor * 6 : -speedFactor * 6;
-          
-          const newX = v.x + moveX;
-          
-          // Very stable confidence (minimal jitter)
-          const confidenceJitter = (Math.random() - 0.5) * 0.01;
-          const newConfidence = Math.min(0.99, Math.max(0.88, v.confidence + confidenceJitter));
-          
-          return {
-            ...v,
-            x: newX,
-            confidence: newConfidence,
-            framesVisible: v.framesVisible + 1
-          };
-        });
+        if (visible) {
+          videoRef.current?.play().catch(() => { });
+          setIsPlaying(true);
+        } else {
+          videoRef.current?.pause();
+          setIsPlaying(false);
+        }
+      },
+      { threshold: 0.1 } // 10% visibility to trigger
+    );
 
-        // Remove cars that have left the frame
-        updated = updated.filter(v => v.x > -12 && v.x < 112);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
-        // Spawn new cars with strict control (cars only, no duplicates)
-        lanes.forEach((lane, laneIndex) => {
-          const carsInLane = updated.filter(v => v.lane === laneIndex);
-          
-          // Strict spacing check to prevent duplicates
-          const hasSpaceForNew = carsInLane.every(car => {
-            if (lane.direction === 'right') {
-              return car.x > 30; // Must be well into frame
-            } else {
-              return car.x < 70;
-            }
-          });
-          
-          // Spawn only if lane has room and spacing is clear
-          const canSpawn = carsInLane.length < MAX_CARS_PER_LANE && hasSpaceForNew;
-          
-          if (canSpawn && Math.random() > 0.95) {
-            updated.push(generateCar(laneIndex));
-          }
-        });
+  // Canvas Drawing Loop (Syncs with Screen Refresh)
+  const drawFrame = useCallback(() => {
+    if (!canvasRef.current || !videoRef.current) return;
 
-        // Filter by confidence threshold for display
-        const visible = updated.filter(v => 
-          v.confidence >= CONFIDENCE_THRESHOLD && 
-          v.framesVisible >= MIN_FRAMES_VISIBLE &&
-          v.x > 0 && v.x < 100
-        );
-        
-        setTotalDetections(visible.length);
-        setViolationCount(visible.filter(v => v.violation).length);
-        
-        return updated;
-      });
-    }, 100); // Faster updates for smoother animation
+    const ctx = canvasRef.current.getContext('2d', { alpha: true });
+    if (!ctx) return;
 
-    return () => clearInterval(interval);
-  }, [isPlaying]);
+    // Clear previous frame
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-  // Handle video loop and playback
+    // Draw Detections
+    const detections = detectionsRef.current;
+
+    // Batch styles
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#10b981'; // emerald-500
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 10px monospace';
+
+    for (let i = 0; i < detections.length; i++) {
+      const { bbox, score, class: label } = detections[i];
+      const [x, y, w, h] = bbox;
+
+      // Scale coordinates to canvas size (if video is scaled)
+      // Assuming canvas matches video resolution 1:1 for simplicity in this optimization
+
+      // Box
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.stroke();
+
+      // Label bg
+      const text = `${Math.round(score * 100)}%`;
+      const textWidth = ctx.measureText(text).width;
+      ctx.fillRect(x, y - 14, textWidth + 6, 14);
+
+      // Label text
+      ctx.save();
+      ctx.fillStyle = '#000000';
+      ctx.fillText(text, x + 3, y - 3);
+      ctx.restore();
+    }
+
+    drawRef.current = requestAnimationFrame(drawFrame);
+  }, []);
+
+  // Detection Loop (Throttled)
+  const detectFrame = useCallback(async () => {
+    // Check constraints
+    if (!isVisibleRef.current || !videoRef.current || videoRef.current.paused || videoRef.current.ended) {
+      requestRef.current = requestAnimationFrame(detectFrame);
+      return;
+    }
+
+    // Throttle
+    const now = performance.now();
+    if (now - lastDetectTimeRef.current < DETECTION_INTERVAL_MS) {
+      requestRef.current = requestAnimationFrame(detectFrame);
+      return;
+    }
+
+    const model = aiService.getModel();
+    if (!model || videoRef.current.readyState < 2) {
+      requestRef.current = requestAnimationFrame(detectFrame);
+      return;
+    }
+
+    try {
+      lastDetectTimeRef.current = now;
+
+      const predictions = await model.detect(videoRef.current, undefined, 0.4);
+
+      // Filter
+      detectionsRef.current = predictions.filter(p =>
+        VALID_CLASSES.includes(p.class) && p.score > CONFIDENCE_THRESHOLD
+      );
+
+      // Update count for UI (debounced to avoid flicker, or just raw)
+      // Only update state if count changed significantly to avoid re-renders
+      // For strict performance, we might skip this or throttle it purely
+      if (Math.abs(detectionsRef.current.length - detectionCount) > 0) {
+        setDetectionCount(detectionsRef.current.length);
+      }
+
+    } catch (e) {
+      // Silent fail
+    }
+
+    requestRef.current = requestAnimationFrame(detectFrame);
+  }, [detectionCount]); // Dependency needed for checking count diff
+
+  // Lifecycle for Loops
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    // Start Loops
+    requestRef.current = requestAnimationFrame(detectFrame);
+    drawRef.current = requestAnimationFrame(drawFrame);
 
-    const handleEnded = () => {
-      video.currentTime = 0;
-      video.play();
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (drawRef.current) cancelAnimationFrame(drawRef.current);
     };
+  }, [detectFrame, drawFrame]);
 
-    video.addEventListener('ended', handleEnded);
-    return () => video.removeEventListener('ended', handleEnded);
-  }, []);
-
-  const togglePlayPause = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (isPlaying) {
-      video.pause();
-    } else {
-      video.play();
-    }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying]);
-
-  const toggleMute = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = !isMuted;
-    setIsMuted(!isMuted);
-  }, [isMuted]);
-
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'high': return 'border-destructive bg-destructive/20 text-destructive';
-      case 'medium': return 'border-warning bg-warning/20 text-warning';
-      default: return 'border-success bg-success/20 text-success';
+  // Handle Resize for Canvas
+  const handleLoadedMetadata = () => {
+    if (videoRef.current && canvasRef.current) {
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
     }
   };
-
-  const getRiskBorderColor = (risk: string) => {
-    switch (risk) {
-      case 'high': return 'border-destructive shadow-[0_0_10px_rgba(239,68,68,0.4)]';
-      case 'medium': return 'border-warning shadow-[0_0_8px_rgba(245,158,11,0.3)]';
-      default: return 'border-success shadow-[0_0_6px_rgba(34,197,94,0.3)]';
-    }
-  };
-
-  const stats = useMemo(() => ({
-    total: totalDetections,
-    violations: violationCount,
-    safe: totalDetections - violationCount
-  }), [totalDetections, violationCount]);
 
   return (
-    <Card 
-      className="relative overflow-hidden bg-card border-border group"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Video Container */}
-      <div className="relative aspect-video bg-black overflow-hidden">
-        {/* Video Element */}
+    <Card ref={containerRef} className="relative overflow-hidden bg-black border-zinc-900 shadow-lg translate-z-0">
+
+      {/* Video Layer */}
+      <div className="relative aspect-video bg-zinc-950">
         <video
           ref={videoRef}
           src={videoSrc}
-          autoPlay
-          muted
+          muted={isMuted}
           loop
           playsInline
-          className="absolute inset-0 w-full h-full object-cover"
+          onLoadedMetadata={handleLoadedMetadata}
+          className="w-full h-full object-cover pointer-events-none"
+          style={{ willChange: 'transform' }} // Hint for compositor
         />
 
-        {/* AI Processing Overlay */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* Scan lines effect */}
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent opacity-30" 
-               style={{ backgroundSize: '100% 4px' }} />
-          
-          {/* Corner brackets */}
-          <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-primary/60" />
-          <div className="absolute top-4 right-4 w-8 h-8 border-r-2 border-t-2 border-primary/60" />
-          <div className="absolute bottom-4 left-4 w-8 h-8 border-l-2 border-b-2 border-primary/60" />
-          <div className="absolute bottom-4 right-4 w-8 h-8 border-r-2 border-b-2 border-primary/60" />
-        </div>
+        {/* Canvas Layer - Absolute on Top */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+        />
 
-        {/* Detection Bounding Boxes - Only show confident, stable detections */}
-        <AnimatePresence mode="popLayout">
-          {detectedVehicles
-            .filter(v => 
-              v.confidence >= CONFIDENCE_THRESHOLD && 
-              v.framesVisible >= MIN_FRAMES_VISIBLE &&
-              v.x > 2 && v.x < 98
-            )
-            .map((vehicle) => (
-            <TooltipProvider key={vehicle.id}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0 }}
-                    animate={{ 
-                      opacity: 1,
-                      left: `${vehicle.x}%`,
-                      top: `${vehicle.y}%`,
-                    }}
-                    exit={{ opacity: 0 }}
-                    transition={{ 
-                      layout: { duration: 0.1, ease: "linear" },
-                      opacity: { duration: 0.2 }
-                    }}
-                    className={`absolute border-2 rounded-sm pointer-events-auto cursor-pointer ${getRiskBorderColor(vehicle.risk)}`}
-                    style={{
-                      width: `${vehicle.width}%`,
-                      height: `${vehicle.height}%`,
-                    }}
-                  >
-                    {/* Car label - clean and minimal */}
-                    <div className={`absolute -top-5 left-0 px-1.5 py-0.5 text-[9px] font-mono rounded-sm whitespace-nowrap ${getRiskColor(vehicle.risk)}`}>
-                      CAR {(vehicle.confidence * 100).toFixed(0)}%
-                    </div>
-                    
-                    {/* Violation indicator */}
-                    {vehicle.violation && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="absolute -bottom-5 left-0 px-1.5 py-0.5 text-[8px] font-semibold bg-destructive/90 text-destructive-foreground rounded-sm whitespace-nowrap"
-                      >
-                        ⚠ {vehicle.violation}
-                      </motion.div>
-                    )}
+        {/* Loading State */}
+        {!isModelReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/50 backdrop-blur-sm z-20">
+            <Scan className="w-8 h-8 text-primary animate-pulse" />
+          </div>
+        )}
+      </div>
 
-                    {/* Corner indicators */}
-                    <div className="absolute -top-0.5 -left-0.5 w-2 h-2 border-l border-t border-current" />
-                    <div className="absolute -top-0.5 -right-0.5 w-2 h-2 border-r border-t border-current" />
-                    <div className="absolute -bottom-0.5 -left-0.5 w-2 h-2 border-l border-b border-current" />
-                    <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 border-r border-b border-current" />
-                  </motion.div>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="bg-popover/95 backdrop-blur-sm">
-                  <div className="text-xs space-y-1">
-                    <p className="font-semibold">{vehicle.type.charAt(0).toUpperCase() + vehicle.type.slice(1)}</p>
-                    <p>Speed: {vehicle.speed} km/h</p>
-                    <p>Confidence: {(vehicle.confidence * 100).toFixed(1)}%</p>
-                    <p>Track ID: #{vehicle.trackingId}</p>
-                    {vehicle.violation && <p className="text-destructive">Violation: {vehicle.violation}</p>}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ))}
-        </AnimatePresence>
-
-        {/* Status Badges */}
-        <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
-          <Badge variant="default" className="bg-destructive/90 text-destructive-foreground backdrop-blur-sm px-2 py-0.5 text-[10px] font-semibold">
-            <Radio className="w-3 h-3 mr-1 animate-pulse" />
-            LIVE
-          </Badge>
-          <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-foreground border-border px-2 py-0.5 text-[10px]">
-            <Cpu className="w-3 h-3 mr-1 text-primary" />
-            AI ACTIVE
-          </Badge>
-        </div>
-
-        {/* Camera ID */}
-        <div className="absolute top-3 right-3 z-10">
-          <Badge variant="outline" className="bg-background/80 backdrop-blur-sm text-muted-foreground border-border text-[10px] font-mono">
+      {/* Static UI Layer */}
+      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/90 to-transparent flex justify-between items-end z-20 pointer-events-none">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[10px] h-5 border-zinc-700 bg-black/60 text-zinc-300 backdrop-blur-md">
             {cameraId}
           </Badge>
-        </div>
-
-        {/* Stats Overlay */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-3 z-10">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-background/80 backdrop-blur-sm rounded text-xs">
-            <Car className="w-3.5 h-3.5 text-primary" />
-            <span className="font-semibold text-foreground">{stats.total}</span>
-          </div>
-          {stats.violations > 0 && (
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-destructive/80 backdrop-blur-sm rounded text-xs">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span className="font-semibold text-destructive-foreground">{stats.violations}</span>
+          {isModelReady && (
+            <div className="flex items-center gap-1 text-[10px] text-emerald-500 font-mono bg-black/40 px-1.5 rounded border border-emerald-500/20 backdrop-blur-md">
+              <Activity className="w-3 h-3" />
+              <span>{detectionCount}</span>
             </div>
           )}
         </div>
-
-        {/* Control Overlay */}
-        <AnimatePresence>
-          {isHovered && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-20"
-            >
-              {/* Center Play/Pause */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Button
-                  variant="glass"
-                  size="lg"
-                  onClick={togglePlayPause}
-                  className="w-16 h-16 rounded-full bg-background/30 backdrop-blur-md border-white/20 hover:bg-background/50 transition-all"
-                >
-                  {isPlaying ? (
-                    <Pause className="w-8 h-8 text-white" />
-                  ) : (
-                    <Play className="w-8 h-8 text-white ml-1" />
-                  )}
-                </Button>
-              </div>
-
-              {/* Bottom Controls */}
-              <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleMute}
-                  className="w-8 h-8 bg-background/30 backdrop-blur-sm hover:bg-background/50"
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-white" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-white" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-8 h-8 bg-background/30 backdrop-blur-sm hover:bg-background/50"
-                >
-                  <Maximize2 className="w-4 h-4 text-white" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-8 h-8 bg-background/30 backdrop-blur-sm hover:bg-background/50"
-                >
-                  <Settings className="w-4 h-4 text-white" />
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-border bg-card/50">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-sm text-foreground">{cameraName}</h3>
-            <p className="text-xs text-muted-foreground">{location}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Eye className="w-3.5 h-3.5" />
-              <span>1080p</span>
-            </div>
-            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          </div>
+        <div className="text-right">
+          <div className="text-[10px] font-medium text-zinc-200">{cameraName}</div>
         </div>
       </div>
+
+      {/* Playback Controls (Only interactive part) */}
+      <div className='absolute top-2 right-2 z-30 opacity-0 hover:opacity-100 transition-opacity duration-200'>
+        <button onClick={() => setIsMuted(!isMuted)} className="p-1.5 bg-black/60 rounded-full text-white/80 hover:text-white backdrop-blur-md">
+          {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        </button>
+      </div>
+
     </Card>
   );
-}
+});
+
+export default SimulatedTrafficFeed;
