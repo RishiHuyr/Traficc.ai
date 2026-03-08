@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  Camera, 
+import {
+  Camera,
   Car,
   AlertTriangle,
   Wifi,
@@ -41,7 +41,7 @@ export default function LiveFeedsPage() {
         </div>
 
         {/* Header */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
@@ -56,15 +56,15 @@ export default function LiveFeedsPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center bg-muted rounded-lg p-1">
-              <Button 
-                variant={layout === 'grid' ? 'default' : 'ghost'} 
+              <Button
+                variant={layout === 'grid' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setLayout('grid')}
               >
                 <Grid3X3 className="w-4 h-4" />
               </Button>
-              <Button 
-                variant={layout === 'featured' ? 'default' : 'ghost'} 
+              <Button
+                variant={layout === 'featured' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setLayout('featured')}
               >
@@ -83,7 +83,7 @@ export default function LiveFeedsPage() {
         </motion.div>
 
         {/* Stats Bar */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}

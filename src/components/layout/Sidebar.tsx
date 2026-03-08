@@ -11,6 +11,7 @@ import {
   Bell,
   Settings,
   Shield,
+  Navigation,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -28,6 +29,7 @@ interface SidebarLink {
 
 const mainLinks: SidebarLink[] = [
   { icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard', href: '/' },
+  { icon: <Navigation className="w-5 h-5" />, label: 'Route Planner', href: '/route-planner' },
   { icon: <Map className="w-5 h-5" />, label: 'Risk Map', href: '/map' },
   { icon: <Camera className="w-5 h-5" />, label: 'Live Feeds', href: '/feeds' },
   { icon: <TrendingUp className="w-5 h-5" />, label: 'Analytics', href: '/analytics' },
@@ -44,7 +46,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
-  
+
   return (
     <motion.aside
       initial={false}
@@ -71,7 +73,7 @@ export function Sidebar() {
           )}
         </div>
       </div>
-      
+
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {mainLinks.map((link) => {
@@ -80,11 +82,10 @@ export function Sidebar() {
             <NavLink
               key={link.href}
               to={link.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 relative group ${
-                isActive 
-                  ? 'bg-sidebar-accent text-sidebar-primary' 
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 relative group ${isActive
+                  ? 'bg-sidebar-accent text-sidebar-primary'
                   : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              }`}
+                }`}
             >
               {isActive && (
                 <motion.div
@@ -111,7 +112,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      
+
       {/* Status indicator */}
       {!collapsed && (
         <div className="p-3">
@@ -127,7 +128,7 @@ export function Sidebar() {
           </div>
         </div>
       )}
-      
+
       {/* Secondary Navigation */}
       <div className="p-3 border-t border-sidebar-border">
         {secondaryLinks.map((link) => {
@@ -136,11 +137,10 @@ export function Sidebar() {
             <NavLink
               key={link.href}
               to={link.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${
-                isActive 
-                  ? 'bg-sidebar-accent text-sidebar-primary' 
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${isActive
+                  ? 'bg-sidebar-accent text-sidebar-primary'
                   : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              }`}
+                }`}
             >
               {link.icon}
               {!collapsed && (
@@ -149,7 +149,7 @@ export function Sidebar() {
             </NavLink>
           );
         })}
-        
+
         {/* Logout button */}
         <Button
           variant="ghost"
@@ -160,7 +160,7 @@ export function Sidebar() {
           <LogOut className="w-4 h-4" />
           {!collapsed && <span className="ml-2 text-xs">Logout</span>}
         </Button>
-        
+
         {/* Collapse button */}
         <Button
           variant="ghost"

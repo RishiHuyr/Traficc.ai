@@ -65,9 +65,9 @@ export default function EnhancedCameraFeed({
 
       for (let i = 0; i < count; i++) {
         const hasViolation = Math.random() < 0.3;
-        const riskLevel: DetectedVehicle['riskLevel'] = 
+        const riskLevel: DetectedVehicle['riskLevel'] =
           hasViolation && Math.random() > 0.5 ? 'high' :
-          hasViolation ? 'moderate' : 'safe';
+            hasViolation ? 'moderate' : 'safe';
 
         newVehicles.push({
           id: `v-${i}`,
@@ -102,26 +102,24 @@ export default function EnhancedCameraFeed({
     const safeCount = vehicles.filter(v => v.riskLevel === 'safe').length;
     const moderateCount = vehicles.filter(v => v.riskLevel === 'moderate').length;
     const highCount = vehicles.filter(v => v.riskLevel === 'high').length;
-    const avgConfidence = vehicles.length > 0 
-      ? vehicles.reduce((acc, v) => acc + v.confidence, 0) / vehicles.length 
+    const avgConfidence = vehicles.length > 0
+      ? vehicles.reduce((acc, v) => acc + v.confidence, 0) / vehicles.length
       : 0;
 
     return { safeCount, moderateCount, highCount, avgConfidence };
   }, [vehicles]);
 
   return (
-    <Card 
-      className={`overflow-hidden group cursor-pointer transition-all duration-300 ${
-        isSelected ? 'ring-2 ring-primary shadow-lg shadow-primary/20' : 'hover:border-primary/30'
-      }`}
+    <Card
+      className={`overflow-hidden group cursor-pointer transition-all duration-300 ${isSelected ? 'ring-2 ring-primary shadow-lg shadow-primary/20' : 'hover:border-primary/30'
+        }`}
       onClick={onSelect}
     >
       <CardContent className="p-0">
         {/* Video Feed Simulation */}
-        <div 
-          className={`relative bg-gradient-to-br from-background via-muted/50 to-background overflow-hidden ${
-            isFeatured ? 'h-[400px]' : 'h-[220px]'
-          }`}
+        <div
+          className={`relative bg-gradient-to-br from-background via-muted/50 to-background overflow-hidden ${isFeatured ? 'h-[400px]' : 'h-[220px]'
+            }`}
         >
           {/* Ambient road simulation */}
           <div className="absolute inset-0">
@@ -153,8 +151,8 @@ export default function EnhancedCameraFeed({
                       top: `${vehicle.y}%`,
                       width: `${vehicle.width}%`,
                       height: `${vehicle.height}%`,
-                      boxShadow: vehicle.riskLevel !== 'safe' 
-                        ? `0 0 12px 2px ${vehicle.riskLevel === 'high' ? 'hsl(var(--destructive) / 0.4)' : 'hsl(var(--warning) / 0.4)'}` 
+                      boxShadow: vehicle.riskLevel !== 'safe'
+                        ? `0 0 12px 2px ${vehicle.riskLevel === 'high' ? 'hsl(var(--destructive) / 0.4)' : 'hsl(var(--warning) / 0.4)'}`
                         : 'none',
                     }}
                   >
@@ -171,11 +169,10 @@ export default function EnhancedCameraFeed({
                         animate={{ opacity: 1, y: 0 }}
                         className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-10"
                       >
-                        <div className={`px-2 py-1 rounded text-[10px] font-medium backdrop-blur-sm border ${
-                          vehicle.riskLevel === 'high' 
-                            ? 'bg-destructive/90 text-destructive-foreground border-destructive/50' 
+                        <div className={`px-2 py-1 rounded text-[10px] font-medium backdrop-blur-sm border ${vehicle.riskLevel === 'high'
+                            ? 'bg-destructive/90 text-destructive-foreground border-destructive/50'
                             : 'bg-warning/90 text-warning-foreground border-warning/50'
-                        }`}>
+                          }`}>
                           <div className="flex items-center gap-1">
                             <span>{vehicle.violationType}</span>
                             <span className="opacity-70">({vehicle.confidence.toFixed(0)}%)</span>
@@ -206,10 +203,10 @@ export default function EnhancedCameraFeed({
 
           {/* Status Badge */}
           <div className="absolute top-3 left-3">
-            <Badge 
+            <Badge
               variant={
                 camera.status === 'online' ? 'online' :
-                camera.status === 'processing' ? 'processing' : 'offline'
+                  camera.status === 'processing' ? 'processing' : 'offline'
               }
               className="backdrop-blur-sm"
             >
@@ -230,7 +227,7 @@ export default function EnhancedCameraFeed({
           {/* Live indicator */}
           <div className="absolute bottom-3 left-3 flex items-center gap-2">
             <div className="flex items-center gap-1.5 bg-destructive/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-destructive-foreground">
-              <motion.div 
+              <motion.div
                 className="w-2 h-2 rounded-full bg-white"
                 animate={{ opacity: [1, 0.5, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
@@ -255,8 +252,8 @@ export default function EnhancedCameraFeed({
 
           {/* Controls overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-14 gap-2">
-            <Button 
-              variant="glass" 
+            <Button
+              variant="glass"
               size="sm"
               onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}
             >
@@ -298,7 +295,7 @@ export default function EnhancedCameraFeed({
             </div>
             <Badge variant={
               camera.riskLevel === 'high' ? 'riskHigh' :
-              camera.riskLevel === 'medium' ? 'riskMedium' : 'riskLow'
+                camera.riskLevel === 'medium' ? 'riskMedium' : 'riskLow'
             }>
               {camera.riskLevel}
             </Badge>

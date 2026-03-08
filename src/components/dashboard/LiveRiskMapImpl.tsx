@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Navigation, MapPin, Layers, Loader2, Zap } from "lucide-react";
+import { Navigation, Layers, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { mockRoadSegments, RoadSegment } from "@/lib/mockRoads";
+import { RoadSegment } from "@/lib/mockRoads";
 import { useRiskStore } from "@/services/riskStore";
+import { RouteOption, LocationPoint } from "@/store/routePlannerStore";
 
 // --- Custom Styles for Traffic Layers ---
 
@@ -32,16 +33,43 @@ const userIcon = () => L.divIcon({
     iconAnchor: [12, 12]
 });
 
+// Colors for route polylines as per requirements
+const getRouteColorByType = (type: string) => {
+    switch (type) {
+        case 'fastest': return '#3b82f6'; // Blue
+        case 'shortest': return '#22c55e'; // Green
+        case 'safest': return '#f59e0b';   // Amber
+        default: return '#3b82f6';
+    }
+};
+
 interface LiveRiskMapProps {
     onTrafficUpdate?: (segments: RoadSegment[]) => void;
     selectedSegmentId?: string | null;
+    // Optional Route Planner props
+    routeData?: RouteOption[];
+    selectedRouteId?: string | null;
+    hideTraffic?: boolean;
+    startPoint?: LocationPoint | null;
+    endPoint?: LocationPoint | null;
 }
 
-export default function LiveRiskMapImpl({ onTrafficUpdate, selectedSegmentId }: LiveRiskMapProps) {
+export default function LiveRiskMapImpl({
+    onTrafficUpdate,
+    selectedSegmentId,
+    routeData,
+    selectedRouteId,
+    hideTraffic = false,
+    startPoint,
+    endPoint
+}: LiveRiskMapProps) {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
     const userMarkerRef = useRef<L.Marker | null>(null);
     const trafficLayerRef = useRef<L.LayerGroup | null>(null);
+    const routeLayerRef = useRef<L.LayerGroup | null>(null);
+    const startMarkerRef = useRef<L.Marker | null>(null);
+    const endMarkerRef = useRef<L.Marker | null>(null);
     const watchIdRef = useRef<number | null>(null);
 
     // Simulation State
@@ -72,6 +100,7 @@ export default function LiveRiskMapImpl({ onTrafficUpdate, selectedSegmentId }: 
         }).addTo(map);
 
         trafficLayerRef.current = L.layerGroup().addTo(map);
+        routeLayerRef.current = L.layerGroup().addTo(map);
 
         // Track user interactions (zoom, pan, drag)
         map.on('zoomstart', () => setHasUserInteracted(true));
@@ -156,13 +185,124 @@ export default function LiveRiskMapImpl({ onTrafficUpdate, selectedSegmentId }: 
         return () => clearInterval(interval);
     }, []);
 
+    // --- Route Rendering (for Route Planner reuse) ---
+    useEffect(() => {
+        const map = mapRef.current;
+        const routeLayer = routeLayerRef.current;
+        if (!routeLayer) return;
+
+        routeLayer.clearLayers();
+
+        // Also clear start/end markers
+        if (startMarkerRef.current) { map?.removeLayer(startMarkerRef.current); startMarkerRef.current = null; }
+        if (endMarkerRef.current) { map?.removeLayer(endMarkerRef.current); endMarkerRef.current = null; }
+
+        if (!routeData || routeData.length === 0) return;
+
+        // Draw unselected routes first (dim/faded)
+        routeData.forEach(route => {
+            if (route.id === selectedRouteId) return;
+            const color = getRouteColorByType(route.type);
+            const latLngs = route.geometry.map(c => [c[1], c[0]] as [number, number]);
+            L.polyline(latLngs, {
+                color: color,
+                weight: 5,
+                opacity: 0.15, // Significantly faded
+                lineCap: 'round',
+                lineJoin: 'round',
+            }).addTo(routeLayer);
+        });
+
+        // Draw selected route on top with glow effect
+        const activeRoute = routeData.find(r => r.id === selectedRouteId) || routeData[0];
+        if (activeRoute) {
+            const color = getRouteColorByType(activeRoute.type);
+            const latLngs = activeRoute.geometry.map(c => [c[1], c[0]] as [number, number]);
+
+            // Outer glow
+            L.polyline(latLngs, { color, weight: 14, opacity: 0.2, lineCap: 'round' }).addTo(routeLayer);
+            // Main line
+            L.polyline(latLngs, { color, weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
+
+            // Zoom to fit
+            if (map && latLngs.length > 0) {
+                const bounds = L.latLngBounds(latLngs);
+                map.flyToBounds(bounds, { padding: [80, 80], duration: 0.9 });
+            }
+
+            // Add start marker
+            const startCoord = latLngs[0];
+            const endCoord = latLngs[latLngs.length - 1];
+
+            const mkIcon = (color: string) => L.divIcon({
+                className: '',
+                html: `<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);">&nbsp;</div>`,
+                iconSize: [18, 18], iconAnchor: [9, 9]
+            });
+
+            if (map) {
+                startMarkerRef.current = L.marker(startCoord, { icon: mkIcon('#3b82f6'), keyboard: false })
+                    .bindTooltip('Start', { direction: 'top', permanent: false }).addTo(map);
+                endMarkerRef.current = L.marker(endCoord, { icon: mkIcon('#ef4444'), keyboard: false })
+                    .bindTooltip('Destination', { direction: 'top', permanent: false }).addTo(map);
+            }
+        }
+    }, [routeData, selectedRouteId]);
+
+    // Handle Start/Stop markers when no route is calculated yet
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || (routeData && routeData.length > 0)) return;
+
+        // Start Marker
+        if (startPoint) {
+            const mkIcon = () => L.divIcon({
+                className: '',
+                html: `<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);">&nbsp;</div>`,
+                iconSize: [18, 18], iconAnchor: [9, 9]
+            });
+
+            if (startMarkerRef.current) {
+                startMarkerRef.current.setLatLng([startPoint.lat, startPoint.lng]);
+            } else {
+                startMarkerRef.current = L.marker([startPoint.lat, startPoint.lng], { icon: mkIcon() }).addTo(map);
+            }
+
+            // Auto-center on start point if it's the first time it's set
+            if (!hasUserInteracted) {
+                map.flyTo([startPoint.lat, startPoint.lng], 15);
+            }
+        } else if (startMarkerRef.current) {
+            map.removeLayer(startMarkerRef.current);
+            startMarkerRef.current = null;
+        }
+
+        // End Marker
+        if (endPoint) {
+            const mkIcon = () => L.divIcon({
+                className: '',
+                html: `<div style="width:18px;height:18px;border-radius:50%;background:#ef4444;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);">&nbsp;</div>`,
+                iconSize: [18, 18], iconAnchor: [9, 9]
+            });
+
+            if (endMarkerRef.current) {
+                endMarkerRef.current.setLatLng([endPoint.lat, endPoint.lng]);
+            } else {
+                endMarkerRef.current = L.marker([endPoint.lat, endPoint.lng], { icon: mkIcon() }).addTo(map);
+            }
+        } else if (endMarkerRef.current) {
+            map.removeLayer(endMarkerRef.current);
+            endMarkerRef.current = null;
+        }
+    }, [startPoint, endPoint, routeData, hasUserInteracted]);
+
     // Function to render traffic lines/markers based on location
     const refreshTrafficLayer = useCallback(() => {
         const layer = trafficLayerRef.current;
         if (!layer) return;
         layer.clearLayers();
 
-        if (!showTraffic) return;
+        if (!showTraffic || hideTraffic) return;
 
         trafficData.forEach(seg => {
             const color = getTrafficColor(seg.riskLevel);
