@@ -1,15 +1,14 @@
 import { memo } from 'react';
 import { useRoutePlannerStore } from '@/store/routePlannerStore';
 import { Card, CardContent } from '@/components/ui/card';
-import { Clock, Route as RouteIcon, ShieldCheck, Zap, Maximize } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Clock, Route as RouteIcon, ShieldCheck, Zap, Maximize, Navigation } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const h = Math.floor(m / 60);
-    if (h > 0) {
-        return `${h}h ${m % 60}m`;
-    }
+    if (h > 0) return `${h}h ${m % 60}m`;
     return `${m}m`;
 };
 
@@ -56,12 +55,19 @@ export const RouteOptionsPanel = memo(() => {
         }
     };
 
+    const selectedRoute = routes.find(r => r.id === selectedRouteId);
+
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Recommended Paths</h3>
+            {/* AI Suggested Route Header */}
+            <div className="flex items-center justify-between px-1 pt-1">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                    <Navigation className="w-3.5 h-3.5 text-primary" />
+                    AI Suggested Route
+                </h3>
                 <span className="text-[10px] text-zinc-600 bg-zinc-900 px-2 py-0.5 rounded-full border border-zinc-800">AI Optimized</span>
             </div>
+
 
             <AnimatePresence>
                 {routes.map((route, index) => {
@@ -133,6 +139,19 @@ export const RouteOptionsPanel = memo(() => {
                     );
                 })}
             </AnimatePresence>
+
+            {/* Start Navigation Button */}
+            {selectedRoute && (
+                <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    <Button
+                        className="w-full mt-1 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm h-10 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+                        onClick={() => alert(`Navigation started via ${selectedRoute.type} route`)}
+                    >
+                        <Navigation className="w-4 h-4" />
+                        Start Navigation
+                    </Button>
+                </motion.div>
+            )}
         </div>
     );
 });

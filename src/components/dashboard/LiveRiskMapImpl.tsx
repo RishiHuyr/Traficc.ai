@@ -45,6 +45,7 @@ const getRouteColorByType = (type: string) => {
 
 interface LiveRiskMapProps {
     onTrafficUpdate?: (segments: RoadSegment[]) => void;
+    onSegmentClick?: (id: string) => void;
     selectedSegmentId?: string | null;
     // Optional Route Planner props
     routeData?: RouteOption[];
@@ -56,6 +57,7 @@ interface LiveRiskMapProps {
 
 export default function LiveRiskMapImpl({
     onTrafficUpdate,
+    onSegmentClick,
     selectedSegmentId,
     routeData,
     selectedRouteId,
@@ -123,9 +125,13 @@ export default function LiveRiskMapImpl({
     const lastZoomedSegmentRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (!selectedSegmentId || !mapRef.current) return;
+        if (!selectedSegmentId || !mapRef.current) {
+            // Reset the lock when selection clears so zooming works again if re-selected later
+            if (!selectedSegmentId) lastZoomedSegmentRef.current = null;
+            return;
+        }
 
-        // Prevent re-zooming to the same segment
+        // Prevent re-zooming if already zoomed to this specific selection instance
         if (lastZoomedSegmentRef.current === selectedSegmentId) return;
 
         const segment = trafficData.find(s => s.id === selectedSegmentId);
@@ -137,9 +143,9 @@ export default function LiveRiskMapImpl({
             const centerLat = segment.path.reduce((sum, p) => sum + p[0], 0) / segment.path.length;
             const centerLng = segment.path.reduce((sum, p) => sum + p[1], 0) / segment.path.length;
 
-            // Smooth fly to location with appropriate zoom
-            mapRef.current.flyTo([centerLat, centerLng], 17, {
-                duration: 1.5,
+            // Smooth fly to location matching requirements
+            mapRef.current.flyTo([centerLat, centerLng], 16, {
+                duration: 0.8,
                 easeLinearity: 0.25
             });
 
@@ -330,8 +336,8 @@ export default function LiveRiskMapImpl({
 
             // 3. Simple Tooltip
             coreLine.bindTooltip(`
-                <div class="px-2 py-1 bg-zinc-900 text-white text-xs border border-zinc-700 rounded shadow-sm font-bold">
-                   ${seg.name}: <span style="color:${color}">${seg.riskLevel.toUpperCase()}</span>
+                <div class="px-2 py-1 bg-[#0f172a] text-white text-xs border border-white/10 rounded shadow-md font-bold">
+                   ${seg.name} <span class="text-zinc-500 font-normal">(${seg.riskLevel.toUpperCase()})</span>
                 </div>
             `, {
                 direction: 'top',
@@ -340,12 +346,15 @@ export default function LiveRiskMapImpl({
                 opacity: 1
             });
 
-            // 4. Highlight on Hover
+            // 4. Highlight on Hover & Click Events
             coreLine.on('mouseover', (e) => {
                 e.target.setStyle({ weight: 6 });
             });
             coreLine.on('mouseout', (e) => {
                 e.target.setStyle({ weight: 4 });
+            });
+            coreLine.on('click', () => {
+                onSegmentClick?.(seg.id);
             });
         });
     }, [trafficData, showTraffic]);
@@ -500,3 +509,4 @@ export default function LiveRiskMapImpl({
         </div>
     );
 }
+

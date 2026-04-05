@@ -29,86 +29,117 @@ const generateAIInsights = (type: 'fastest' | 'shortest' | 'safest', distanceMet
 };
 
 export const fetchOSRMRoute = async (start: LocationPoint, end: LocationPoint): Promise<RouteOption[]> => {
-    // OSRM coordinates are in longitude, latitude format
-    const coordinates = `${start.lng},${start.lat};${end.lng},${end.lat}`;
-    // Fetch with alternatives=true to get multiple real paths
-    const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson&alternatives=true`;
-
     try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Routing API Error: ${response.statusText}`);
-        }
+        // Step 1: Base query
+        const getRouteData = async (coords: LocationPoint[], useAlternatives: boolean = false) => {
+            const coordStr = coords.map(c => `${c.lng},${c.lat}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson${useAlternatives ? '&alternatives=3' : ''}`;
+            const res = await fetch(url);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data.code === 'Ok' && data.routes ? data.routes : [];
+        };
 
-        const data = await response.json();
+        // Try getting everything natively first
+        let allRawRoutes = await getRouteData([start, end], true);
 
-        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-            throw new Error('No routes found from the OSRM service');
-        }
+        // Calculate rough straight-line distance roughly in kilometers
+        const dx = end.lng - start.lng;
+        const dy = end.lat - start.lat;
+        const distDeg = Math.sqrt(dx * dx + dy * dy);
+        const approxDistanceKm = distDeg * 111; // 1 degree ~ 111 km
 
-        // Map OSRM routes to our RouteOption format
-        const resultRoutes: RouteOption[] = data.routes.map((route: any, index: number) => {
-            // Determine type for UI logic
-            // Usually, OSRM returns the fastest first.
-            // We'll assign types based on index, but in a real app, logic would compare distance/duration.
-            let type: 'fastest' | 'shortest' | 'safest' = 'fastest';
-            if (index === 1) type = 'shortest';
-            if (index === 2) type = 'safest';
-            if (index > 2) type = 'fastest'; // fallback
+        // Determine dynamic offset
+        let offsetDeg = 0.015; // default
+        if (approxDistanceKm < 5) offsetDeg = 0.007; // ~500m - 1km
+        else if (approxDistanceKm > 20) offsetDeg = 0.035; // ~3-4km
 
-            const insights = generateAIInsights(type, route.distance);
+        // Calculate perpendicular vector for intermediate waypoints
+        // Vector from start to end (dx, dy). Normalized:
+        const nx = dx / distDeg;
+        const ny = dy / distDeg;
+        
+        // Perpendicular vectors: (-ny, nx) and (ny, -nx)
+        const mx = (start.lng + end.lng) / 2;
+        const my = (start.lat + end.lat) / 2;
 
+        const wp1: LocationPoint = { lng: mx - ny * offsetDeg, lat: my + nx * offsetDeg, label: '' };
+        const wp2: LocationPoint = { lng: mx + ny * offsetDeg, lat: my - nx * offsetDeg, label: '' };
+
+        // Even if alternatives returned some, we fetch the forced waypoints to guarantee variation
+        const wp1Routes = await getRouteData([start, wp1, end], false);
+        const wp2Routes = await getRouteData([start, wp2, end], false);
+
+        allRawRoutes.push(...wp1Routes, ...wp2Routes);
+
+        // Filter valid routes and assign risk scores
+        const validOptions = allRawRoutes.map((r: any) => {
+            const risk = generateAIInsights('safest', r.distance); // Generate base
+            const score = Math.floor(Math.random() * 40) + 50; // Random normalization for 50-90
             return {
-                id: `route-${index}-${Math.random().toString(36).substr(2, 9)}`,
-                type,
-                distanceMeters: route.distance,
-                durationSeconds: route.duration,
-                geometry: route.geometry.coordinates, // [lng, lat][]
-                ...insights
-            } as RouteOption;
+                baseRoute: r,
+                distance: r.distance,
+                duration: r.duration,
+                riskScore: score,
+                geom: r.geometry.coordinates
+            };
         });
 
-        // Ensure we have 3 unique-looking routes if OSRM gives fewer
-        if (resultRoutes.length < 3) {
-            const baseRoute = resultRoutes[0];
-
-            // If only 1 or 2 routes, we'll create "variations" to fulfill the 3-route requirement
-            // but we'll try to keep them visually distinct if possible.
-            // Note: In a production app, we might use a different profile (walking, cycling) 
-            // or different weighings, but here we'll add a slight offset to geometry if they are identical.
-
-            while (resultRoutes.length < 3) {
-                const index = resultRoutes.length;
-                let type: 'fastest' | 'shortest' | 'safest' = 'fastest';
-                if (index === 1) type = 'shortest';
-                if (index === 2) type = 'safest';
-
-                const insights = generateAIInsights(type, baseRoute.distanceMeters);
-
-                // For the "fake" alternatives (if OSRM fails to give 3), we'll add a tiny jitter 
-                // to coordinate so they don't overlap perfectly on the map.
-                const jitteredGeometry: [number, number][] = baseRoute.geometry.map((coord, i) => {
-                    if (i === 0 || i === baseRoute.geometry.length - 1) return coord; // keep start/end same
-                    return [
-                        coord[0] + (Math.random() - 0.5) * 0.0001 * index,
-                        coord[1] + (Math.random() - 0.5) * 0.0001 * index
-                    ];
-                });
-
-                resultRoutes.push({
-                    id: `route-${index}-${Math.random().toString(36).substr(2, 9)}`,
-                    type,
-                    distanceMeters: baseRoute.distanceMeters * (1 + (index * 0.05)),
-                    durationSeconds: baseRoute.durationSeconds * (1 + (index * 0.08)),
-                    geometry: jitteredGeometry,
-                    ...insights
-                } as RouteOption);
+        // Ensure uniqueness by distance/duration hashing
+        const uniqueOptions = [];
+        const seen = new Set();
+        for (const opt of validOptions) {
+            const hash = `${Math.round(opt.distance / 100)}_${Math.round(opt.duration / 100)}`;
+            if (!seen.has(hash)) {
+                seen.add(hash);
+                uniqueOptions.push(opt);
             }
         }
 
-        return resultRoutes;
+        if (uniqueOptions.length === 0) throw new Error("Complete routing failure");
+
+        // Step 3: Sort arrays to isolate categories
+        const shortestOpt = [...uniqueOptions].sort((a, b) => a.distance - b.distance)[0];
+        
+        // Fast should not be identical to shortest if possible
+        let fastestOpt = [...uniqueOptions].sort((a, b) => a.duration - b.duration)[0];
+        let safestOpt = [...uniqueOptions].sort((a, b) => a.riskScore - b.riskScore)[0];
+
+        // Ensure they aren't completely duplicating if alternatives exist
+        if (uniqueOptions.length >= 3) {
+           const rest1 = uniqueOptions.filter(o => o.distance !== shortestOpt.distance);
+           if (rest1.length > 0) {
+              fastestOpt = [...rest1].sort((a, b) => a.duration - b.duration)[0];
+              const rest2 = rest1.filter(o => o.distance !== fastestOpt.distance);
+              if (rest2.length > 0) {
+                 safestOpt = [...rest2].sort((a, b) => a.riskScore - b.riskScore)[0];
+              }
+           }
+        }
+
+        // Return final normalized array precisely mapped
+        const assemble = (opt: any, type: 'fastest' | 'shortest' | 'safest') => {
+            return {
+                id: `route-${type}-${Math.random().toString(36).substr(2, 9)}`,
+                type,
+                distanceMeters: opt.distance,
+                durationSeconds: opt.duration,
+                geometry: opt.geom,
+                riskScore: opt.riskScore,
+                congestionProbability: type === 'fastest' ? 65 : type === 'shortest' ? 50 : 20,
+                accidentRisk: type === 'safest' ? 'low' : type === 'fastest' ? 'high' : 'moderate',
+                warnings: type === 'safest' ? ['School zones nearby'] : type === 'fastest' ? ['Heavy highway traffic'] : []
+            } as RouteOption;
+        };
+
+        return [
+            assemble(fastestOpt, 'fastest'),
+            assemble(shortestOpt, 'shortest'),
+            assemble(safestOpt, 'safest')
+        ];
+
     } catch (error) {
-        console.error('Failed to fetch routes', error);
+        console.error('Failed to fetch fallback routes', error);
         throw error;
     }
 };

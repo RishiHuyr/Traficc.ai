@@ -10,15 +10,13 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import RiskMapPage from "./pages/RiskMapPage";
 import LiveFeedsPage from "./pages/LiveFeedsPage";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import AIInsightsPage from "./pages/AIInsightsPage";
-import AlertsPage from "./pages/AlertsPage";
 import SettingsPage from "./pages/SettingsPage";
 import AccidentAnalysisPage from "./pages/AccidentAnalysisPage";
 import RoutePlannerPage from "./pages/RoutePlannerPage";
 import ProfilePage from "./pages/ProfilePage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
+import AIPredictionDashboard from "./pages/AIPredictionDashboard";
 
 const queryClient = new QueryClient();
 
@@ -34,13 +32,11 @@ const App = () => (
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/map" element={<ProtectedRoute><RiskMapPage /></ProtectedRoute>} />
           <Route path="/feeds" element={<ProtectedRoute><LiveFeedsPage /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
-          <Route path="/insights" element={<ProtectedRoute><AIInsightsPage /></ProtectedRoute>} />
-          <Route path="/alerts" element={<ProtectedRoute><AlertsPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/accident-analysis" element={<ProtectedRoute><AccidentAnalysisPage /></ProtectedRoute>} />
           <Route path="/route-planner" element={<ProtectedRoute><RoutePlannerPage /></ProtectedRoute>} />
+          <Route path="/ai-prediction" element={<ProtectedRoute><AIPredictionDashboard /></ProtectedRoute>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
