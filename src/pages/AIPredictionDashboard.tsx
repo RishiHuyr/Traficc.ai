@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   AlertTriangle, Clock, Sparkles, Brain, Zap, Activity,
   Mic, Search, Info, ShieldAlert, Video, PlayCircle,
-  Loader2, LocateFixed, CheckCircle2,
+  LocateFixed, CheckCircle2,
 } from 'lucide-react';
 import { useRiskStore } from '@/services/riskStore';
 import LiveRiskMapImpl from '@/components/dashboard/LiveRiskMapImpl';
@@ -51,7 +51,6 @@ const ROAD_COLOR: Record<Road['current'], string> = {
 /* ═══ ORCHESTRATOR ════════════════════════════════════════════════ */
 export default function AIPredictionDashboard() {
   const { zones, updateUserLocation, fetchNearbyRoads } = useRiskStore();
-  const [stage, setStage] = useState<'loading' | 'ready'>('loading');
   const [loc, setLoc] = useState<Loc | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -90,7 +89,7 @@ export default function AIPredictionDashboard() {
       // Fetch full network 4-5km from Overpass API (dashboard data)
       await fetchNearbyRoads(lat, lng);
 
-      if (active) { setStage('ready'); }
+      if (active) { /* data loaded silently */ }
     };
     fetchLoc();
     return () => { active = false; };
@@ -124,17 +123,11 @@ export default function AIPredictionDashboard() {
     }).sort((a, b) => b.riskScore - a.riskScore); // Highest risk first
   }, [zones, loc]);
 
-  if (stage === 'loading' || !loc) {
-    return (
-      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center text-cyan-500 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="text-xs text-zinc-500 tracking-widest uppercase">Loading AI Traffic Data…</p>
-      </div>
-    );
-  }
+  // No blocking loading screen — page renders immediately
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const displayLoc = loc || { name: 'Ludhiana', lat: 30.900965, lng: 75.8572758 };
 
   return (
     <DashboardLayout>
@@ -173,7 +166,7 @@ export default function AIPredictionDashboard() {
               <Clock className="w-3 h-3" /> {timeStr}
             </div>
             <div className="flex items-center gap-1.5 text-zinc-300 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
-              <LocateFixed className="w-3 h-3 text-cyan-400" /> {loc.name}
+              <LocateFixed className="w-3 h-3 text-cyan-400" /> {displayLoc.name}
             </div>
           </div>
         </div>
